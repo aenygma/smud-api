@@ -1,4 +1,5 @@
 #files
+*.sw?
 
 #dirs
 venv/
