@@ -19,7 +19,7 @@ def login(username, password):
     DATA_URL = "https://myaccount.smud.org/manage/energyusage"
     session = requests.session()
 
-    # go to url
+    # Login to get token
     resp = session.get(LOGIN_URL, headers=HEADERS)
     page = BeautifulSoup(resp.content, 'html5lib')
     token = page.find('input', attrs={'name': "__RequestVerificationToken"}).get('value')
@@ -30,7 +30,7 @@ def login(username, password):
         "UserId": username,
         "Password": password}
 
-    # Login
+    # Login with creds
     resp = session.post(LOGIN_URL, data=form_data, headers=HEADERS)
     if resp.status_code != 200:
         print("Error :", resp.status_code, resp.content)
@@ -41,14 +41,15 @@ def login(username, password):
     if resp.status_code != 200:
         print("Error :", resp.status_code, resp.content)
         raise
-    # SSO stuff
+
+    # parse SSO request
     sso_page = BeautifulSoup(resp.content, 'html5lib')
     sso_form = sso_page.find('form')
     sso_url = sso_form.get('action')
     sso_data = dict([(i.get('name'), i.get('value')) for i in sso_form.find_all('input')])
-    #print(sso_url, sso_data)
     time.sleep(2)
 
+    # send SSO request
     resp = session.post(sso_url, data=sso_data, headers=HEADERS)
     if resp.status_code != 200:
         print("Error :", resp.status_code, resp.content)
@@ -56,16 +57,17 @@ def login(username, password):
     return session, resp, sso_page
 
 def dump(page):
+    """ helper to dump a page """
+
     with open("dump.html", 'wb') as fh:
         fh.write(page.content)
 
-session, _, _ = login(config['Auth']['username'], config['Auth']['password'])
-
-
+#session, _, _ = login(config['Auth']['username'], config['Auth']['password'])
 
 #g=list(filter(lambda x: x.text.find('window.seriesDTO')!=-1, BeautifulSoup(d[1].content).find_all('script')))
 
 #i=re.findall(r'window.seriesDTO = (.*});', g[0].text, re.M|re.I|re.DOTALL)[0]
 #j = json.loads(i)
 #j.get('series')[0].get('data')
+
 
