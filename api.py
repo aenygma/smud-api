@@ -56,14 +56,20 @@ def login(username, password):
         raise
     return session, resp, sso_page
 
-def dump(page):
+def dump(page, filename="dump.html"):
     """ helper to dump a page """
 
-    with open("dump.html", 'wb') as fh:
+    with open(filename, 'wb') as fh:
         fh.write(page.content)
 
-#session, _, _ = login(config['Auth']['username'], config['Auth']['password'])
+# XXX HACK. prevent exporting of Auth class consumer
+#del config['Auth']
 
+def is_alive(session):
+    """ determine if auth is still valid """
+    return session.cookies.get('sid', domain="smud.okta.com") is not None
+
+# -----
 #g=list(filter(lambda x: x.text.find('window.seriesDTO')!=-1, BeautifulSoup(d[1].content).find_all('script')))
 
 #i=re.findall(r'window.seriesDTO = (.*});', g[0].text, re.M|re.I|re.DOTALL)[0]
