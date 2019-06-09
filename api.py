@@ -62,12 +62,62 @@ def dump(page, filename="dump.html"):
     with open(filename, 'wb') as fh:
         fh.write(page.content)
 
+session, _, _ = login(config['Auth']['username'], config['Auth']['password'])
+
 # XXX HACK. prevent exporting of Auth class consumer
 #del config['Auth']
 
-def is_alive(session):
-    """ determine if auth is still valid """
-    return session.cookies.get('sid', domain="smud.okta.com") is not None
+class SMUD_API:
+
+    def __init__(self):
+        self.session = None
+        self.alive = False
+        self.login_retries = 3
+
+    def login(self, username, password):
+        """ login to the smud system """
+
+        #self.session, _, _ = login(config['Auth']['username'], config['Auth']['password'])
+        self.session, _, _ = login(username, password)
+
+    def is_alive(session):
+        """ determine if auth is still valid """
+        return session.cookies.get('sid', domain="smud.okta.com") is not None
+
+    def get(self, url):
+        """ make a url request """
+
+        if not self.alive:
+            self.login()
+
+        ret = self.session.get(url)
+        # check if session is alive after request
+        #  expires when out of use for a while
+        if self.is_alive():
+            return ret
+        else:
+            if self.login_retries > 0:
+                self.login_retries -= 1
+                ret = self.get(url)
+                return ret
+            else:
+                Exception("Too many retries with failure")
+
+    def parse_html(html):
+        """ parse html from script tag into python dictionary """
+
+        # find all script elements
+        scripts_elems = BeautifulSoup(html).find_all('script')
+        script_elem = list(filter(lambda x: x.text.find('window.seriesDTO')!=-1, scripts_elems))
+
+        assert len(script_elem) > 0, "could not find data in page"
+
+        # grab the dictionary portion
+        js_data = re.findall(r'window.seriesDTO = (.*});', script_elem[0].text, re.M|re.I|re.DOTALL)[0]
+        data = json.loads(js_data)
+        return data
+
+
 
 # -----
 #g=list(filter(lambda x: x.text.find('window.seriesDTO')!=-1, BeautifulSoup(d[1].content).find_all('script')))
