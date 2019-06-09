@@ -1,9 +1,12 @@
 #!/usr/bin/env python
 # coding: utf-8
 
+import re
+import json
 import time
 import requests
 import configparser
+
 from bs4 import BeautifulSoup
 
 config = configparser.ConfigParser()
@@ -62,7 +65,6 @@ def dump(page, filename="dump.html"):
     with open(filename, 'wb') as fh:
         fh.write(page.content)
 
-session, _, _ = login(config['Auth']['username'], config['Auth']['password'])
 
 # XXX HACK. prevent exporting of Auth class consumer
 #del config['Auth']
@@ -71,8 +73,8 @@ class SMUD_API:
 
     def __init__(self):
         self.session = None
-        self.alive = False
         self.login_retries = 3
+        self.current_url = None
 
     def login(self, username, password):
         """ login to the smud system """
@@ -80,14 +82,14 @@ class SMUD_API:
         #self.session, _, _ = login(config['Auth']['username'], config['Auth']['password'])
         self.session, _, _ = login(username, password)
 
-    def is_alive(session):
+    def is_alive(self):
         """ determine if auth is still valid """
-        return session.cookies.get('sid', domain="smud.okta.com") is not None
+        return self.session.cookies.get('sid', domain="smud.okta.com") is not None
 
-    def get(self, url):
-        """ make a url request """
+    def _get(self, url):
+        """ helper to make url request """
 
-        if not self.alive:
+        if not self.is_alive():
             self.login()
 
         ret = self.session.get(url)
@@ -98,11 +100,63 @@ class SMUD_API:
         else:
             if self.login_retries > 0:
                 self.login_retries -= 1
-                ret = self.get(url)
+                ret = self._get(url)
                 return ret
             else:
                 Exception("Too many retries with failure")
 
+    @staticmethod
+    def _make_url(resource_type, resource_by, date):
+        """ convert request into a url.
+            resource_type must be in valid_types,
+            resource_by must be in valid_bys
+            date is a tuple (year, month, day) """
+
+        url_base = "https://smud.opower.com/ei/app/myEnergyUse/"
+        resource_type_dict = {"cost": "rates/", "usage": "usage/"}
+        valid_types = ["cost", "usage"]
+        valid_bys = ["day", "bill", "year"]
+
+        # validate
+        if resource_type not in valid_types:
+            raise Exception("Type must be: ", valid_types)
+
+        if resource_by not in valid_bys:
+            raise Exception("Resource must be requested by: ", valid_bys)
+
+        try:
+            #TODO: validate type, range; >2000, (0,12), (0,31)
+            year, month, day = date
+        except ValueError as e:
+            raise Exception("Date must be a tuple of (y, m, d)")
+
+        # make url
+        url = url_base
+        url += resource_type_dict.get(resource_type)
+        url += f'{resource_by}/'
+        if resource_by == "day":
+            url += f'{year}/{month}/{day}'
+        elif resource_by == "bill":
+            url += f'{year}/{month}'
+        else:
+            url += f'{year}'
+        return url
+
+    def get(self, resource_type, resource_by, date):
+        """ make a url request """
+
+        # make request, parse and clean
+        self.current_url = SMUD_API._make_url(resource_type, resource_by, date)
+        resp = self._get(self.current_url)
+        if resp.status_code != 200:
+            raise Exception("Url (%s) returned status %s" % \
+                    (self.current_url, resp.status_code))
+
+        parsed = self.parse_html(resp.text)
+        data = self.clean_data(parsed)
+        return data
+
+    @staticmethod
     def parse_html(html):
         """ parse html from script tag into python dictionary """
 
@@ -110,20 +164,29 @@ class SMUD_API:
         scripts_elems = BeautifulSoup(html).find_all('script')
         script_elem = list(filter(lambda x: x.text.find('window.seriesDTO')!=-1, scripts_elems))
 
-        assert len(script_elem) > 0, "could not find data in page"
+        if len(script_elem) < 1:
+            raise Exception("could not find data in page")
 
         # grab the dictionary portion
         js_data = re.findall(r'window.seriesDTO = (.*});', script_elem[0].text, re.M|re.I|re.DOTALL)[0]
         data = json.loads(js_data)
         return data
 
+    @staticmethod
+    def clean_data(data, series_col=0):
+        """ given a list, it keeps keys from KEYS_TO_KEEP, and returns a list with the rest removed """
 
+        # for energy rates
+        data = data.get('series', [{}])[series_col].get('data')
+        KEYS_TO_KEEP = ['startDate', 'endDate', 'value']
+        ret_data = []
 
-# -----
-#g=list(filter(lambda x: x.text.find('window.seriesDTO')!=-1, BeautifulSoup(d[1].content).find_all('script')))
-
-#i=re.findall(r'window.seriesDTO = (.*});', g[0].text, re.M|re.I|re.DOTALL)[0]
-#j = json.loads(i)
-#j.get('series')[0].get('data')
-
+        # for each datapoint
+        for item in data:
+            new_item = {}
+            # find keys you want to keep
+            for key in KEYS_TO_KEEP:
+                new_item.update({key: item.get(key, None)})
+            ret_data.append(new_item)
+        return ret_data
 
