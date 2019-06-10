@@ -56,7 +56,17 @@ sapi.get("cost", "day", (2019, 3, 14)
     # get cost for year 2019. Month and Day is ignored
     sapi.get("cost", "year", (2019, '', ''))
 ```
+---
 
+### AUTH:
+The project presently uses a __config.ini__ file to store credentials.
+example:
+```
+$ cat config.ini
+[Auth]
+username=totallynotarobot@gmail.com
+password=ilovecaptchas
+```
 ---
 
 ### Dependencies
