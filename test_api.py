@@ -6,13 +6,13 @@
 import api
 import pytest
 
-def test_obj_creation(self):
+def test_obj_creation():
 
     a = api.SMUD_API()
     assert a is not None
 
 @pytest.mark.slow
-def test_live_get_usage_by_day(self):
+def test_live_get_usage_by_day():
     """ get LIVE usage for a day """
 
     a = api.SMUD_API()
