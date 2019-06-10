@@ -1,8 +1,9 @@
 # SMUD API
 ---
 
-An API to get usage and cost information from SMUD (Sacramento Municipal Utility District), an electricity provider for the Sacramento County.
+An API to get usage and cost information from [SMUD - Sacramento Municipal Utility District](https://www.smud.org/), an electricity provider for the Sacramento County.
 
+## Purpose:
 SMUD didn't have a programmatic way to get usage and cost data for my account. I made this to get that information so I could monitor and run stats.
 
 This project logs in, manages the SSO, parses the energy usage data and returns a list.
@@ -10,8 +11,10 @@ This project logs in, manages the SSO, parses the energy usage data and returns 
 
 *Note: This is an unofficial project, aimed at helping people monitor their utilities.*
 
+Read more: [SMUD Wikipage](https://en.wikipedia.org/wiki/Sacramento_Municipal_Utility_District)
+
 ---
-### Usage:
+## Usage:
 
 Here's code to login and get the cost for the day of March 14th 2019.
 
@@ -61,7 +64,7 @@ sapi.get("cost", "day", (2019, 3, 14)
 ```
 ---
 
-### AUTH:
+## AUTH:
 The project presently uses a __config.ini__ file to store credentials.
 example:
 ```
@@ -72,7 +75,7 @@ password=ilovecaptchas
 ```
 ---
 
-### Dependencies
+## Dependencies
 * requests
 * BeautifulSoup
 
