@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 # coding: utf-8
 
 import re
@@ -13,51 +12,10 @@ config = configparser.ConfigParser()
 config.read("config.ini")
 
 HEADERS = {
-    "user-agent" : "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_13_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/73.0.3683.103 Safari/537.36"}
-
-def login(username, password):
-    """ log into smud site """
-
-    LOGIN_URL = "https://myaccount.smud.org/?Length=0&ack=True"
-    DATA_URL = "https://myaccount.smud.org/manage/energyusage"
-    session = requests.session()
-
-    # Login to get token
-    resp = session.get(LOGIN_URL, headers=HEADERS)
-    page = BeautifulSoup(resp.content, 'html5lib')
-    token = page.find('input', attrs={'name': "__RequestVerificationToken"}).get('value')
-
-    form_data = {
-        "__RequestVerificationToken": token,
-        "Lang": "en",
-        "UserId": username,
-        "Password": password}
-
-    # Login with creds
-    resp = session.post(LOGIN_URL, data=form_data, headers=HEADERS)
-    if resp.status_code != 200:
-        print("Error :", resp.status_code, resp.content)
-        raise
-
-    # Go to usage
-    resp = session.get(DATA_URL, headers=HEADERS)
-    if resp.status_code != 200:
-        print("Error :", resp.status_code, resp.content)
-        raise
-
-    # parse SSO request
-    sso_page = BeautifulSoup(resp.content, 'html5lib')
-    sso_form = sso_page.find('form')
-    sso_url = sso_form.get('action')
-    sso_data = dict([(i.get('name'), i.get('value')) for i in sso_form.find_all('input')])
-    time.sleep(2)
-
-    # send SSO request
-    resp = session.post(sso_url, data=sso_data, headers=HEADERS)
-    if resp.status_code != 200:
-        print("Error :", resp.status_code, resp.content)
-        raise
-    return session, resp, sso_page
+    "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_13_6) "\
+        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/73.0.3683.103 "\
+        "Safari/537.36"
+}
 
 def dump(page, filename="dump.html"):
     """ helper to dump a page """
@@ -65,11 +23,11 @@ def dump(page, filename="dump.html"):
     with open(filename, 'wb') as fh:
         fh.write(page.content)
 
-
 # XXX HACK. prevent exporting of Auth class consumer
 #del config['Auth']
 
 class SMUD_API:
+    """ Object to interface with the SMUD system"""
 
     def __init__(self):
         self.session = None
@@ -77,25 +35,73 @@ class SMUD_API:
         self.current_url = None
 
     def login(self, username, password):
-        """ login to the smud system """
+        """ log into smud site """
 
-        #self.session, _, _ = login(config['Auth']['username'], config['Auth']['password'])
-        self.session, _, _ = login(username, password)
+        LOGIN_URL = "https://myaccount.smud.org/?Length=0&ack=True"
+        DATA_URL = "https://myaccount.smud.org/manage/energyusage"
+        session = requests.session()
 
-    def is_alive(self):
+        # Login to get token
+        resp = session.get(LOGIN_URL, headers=HEADERS)
+        page = BeautifulSoup(resp.content, 'html5lib')
+        token = page.find('input', attrs={'name': "__RequestVerificationToken"}).get('value')
+
+        form_data = {
+            "__RequestVerificationToken": token,
+            "Lang": "en",
+            "UserId": username,
+            "Password": password}
+
+        # Login with creds
+        resp = session.post(LOGIN_URL, data=form_data, headers=HEADERS)
+        if resp.status_code != 200:
+            print("Error :", resp.status_code, resp.content)
+            raise
+
+        # Go to usage
+        resp = session.get(DATA_URL, headers=HEADERS)
+        if resp.status_code != 200:
+            print("Error :", resp.status_code, resp.content)
+            raise
+
+        # parse SSO request
+        sso_page = BeautifulSoup(resp.content, 'html5lib')
+        sso_form = sso_page.find('form')
+        sso_url = sso_form.get('action')
+        sso_data = dict([(i.get('name'), i.get('value')) for i in sso_form.find_all('input')])
+        time.sleep(2)
+
+        # send SSO request
+        resp = session.post(sso_url, data=sso_data, headers=HEADERS)
+        if resp.status_code != 200:
+            print("Error :", resp.status_code, resp.content)
+            raise
+
+        # set as current session
+        self.session = session
+
+    def logout(self):
+        """ logout of system """
+
+        URL = "https://myaccount.smud.org/signin/signout"
+        resp = self.session.get(URL)
+        if resp.status_code != 200:
+            raise Exception("Logout failed: status_code", resp.status_code)
+
+    def is_auth_valid(self):
         """ determine if auth is still valid """
         return self.session.cookies.get('sid', domain="smud.okta.com") is not None
 
     def _get(self, url):
-        """ helper to make url request """
+        """ helper to make url request. retry auth if cookie expired """
 
-        if not self.is_alive():
+        if not self.is_auth_valid():
             self.login()
 
         ret = self.session.get(url)
         # check if session is alive after request
         #  expires when out of use for a while
-        if self.is_alive():
+        if self.is_auth_valid():
             return ret
         else:
             if self.login_retries > 0:
@@ -146,7 +152,7 @@ class SMUD_API:
         """ make a url request """
 
         # make request, parse and clean
-        self.current_url = SMUD_API._make_url(resource_type, resource_by, date)
+        self.current_url = self._make_url(resource_type, resource_by, date)
         resp = self._get(self.current_url)
         if resp.status_code != 200:
             raise Exception("Url (%s) returned status %s" % \
