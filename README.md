@@ -7,6 +7,9 @@ SMUD didn't have a programmatic way to get usage and cost data for my account. I
 
 This project logs in, manages the SSO, parses the energy usage data and returns a list.
 
+
+*Note: This is an unofficial project, aimed at helping people monitor their utilities.*
+
 ---
 ### Usage:
 
