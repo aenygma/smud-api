@@ -1,8 +1,3 @@
-#!/usr/bin/env python -m pytest
-
-# notes: invoke ./test_api.py
-#  else complains of importerrors on bs4
-
 import api
 import pytest
 
